@@ -1,0 +1,585 @@
+<div class="workspace-admin">
+  <div class="admin-login-wrap" *ngIf="!auth.isAuthenticated() || (!auth.hasRole('StudioAdmin'))">
+    <button class="brand-lockup" (click)="goPublic()"><span class="brand-mark">JJ</span><span
+        class="brand-text"><strong>JJ MAKEUP STUDIO</strong><small>STUDIO ADMIN</small></span></button>
+    <section class="admin-login-card">
+      <div class="eyebrow">SECURE WORKSPACE</div>
+      <h1>Welcome <em>back.</em></h1>
+      <p>Sign in to manage appointments, services and studio content.</p>
+      <form (ngSubmit)="login()"><label>Email address<input type="email" [(ngModel)]="email" name="email"
+            autocomplete="username" required></label><label>Password<input type="password" [(ngModel)]="password"
+            name="password" autocomplete="current-password" required></label>
+        <p class="api-error" *ngIf="loginError">{{loginError}}</p><button class="button button-dark booking-submit"
+          [disabled]="loginPending" type="submit">{{loginPending?'Signing in…':'Sign in'}} <span>↗</span></button>
+      </form>
+      <div class="login-help"><strong>Local development
+          account</strong><span>admin@jjmakeup.local</span><span>DevOnly!ChangeMe2026</span><small>Change this seeded
+          password before any shared deployment.</small></div>
+      <button class="text-link" (click)="goPublic()">← Back to website</button>
+    </section>
+  </div>
+  <ng-container *ngIf="auth.isAuthenticated() && auth.hasRole('StudioAdmin')">
+    <aside class="workspace-sidebar"><button class="brand-lockup admin-brand" (click)="goPublic()"><span
+          class="brand-mark">JJ</span><span class="brand-text"><strong>JJ STUDIO</strong><small>BUSINESS
+            WORKSPACE</small></span></button>
+      <div class="side-label">MANAGE</div>
+      <button class="side-item" [class.selected]="activeTab==='overview'" (click)="activeTab='overview'"><span>▦</span>
+        Overview</button>
+      <button class="side-item" [class.selected]="activeTab==='bookings'" (click)="activeTab='bookings'"><span>◷</span>
+        Appointments <b>{{pendingBookings}}</b></button>
+      <button class="side-item" [class.selected]="activeTab==='confirmed'"
+        (click)="activeTab='confirmed'"><span>✓</span>
+        Confirmed Bookings <b>{{confirmedBookings.length}}</b></button>
+      <button class="side-item" [class.selected]="activeTab==='services'" (click)="activeTab='services'"><span>✧</span>
+        Services & pricing <b>{{services.length}}</b></button><button class="side-item"
+        [class.selected]="activeTab==='content'" (click)="activeTab='content'"><span>▤</span> Website
+        content</button><button class="side-item" [class.selected]="activeTab==='reports'"
+        (click)="activeTab='reports'"><span>▥</span> Reports & analytics</button>
+      <div class="sidebar-bottom">
+        <div class="profile-mini"><span
+            class="profile-avatar">{{(auth.user()?.displayName||'JJ').slice(0,2).toUpperCase()}}</span><span><strong>{{auth.user()?.displayName}}</strong><small>{{auth.user()?.email}}</small></span>
+        </div><button class="return-site" (click)="goPublic()">← Public website</button><button class="return-site"
+          (click)="goPlatform()">Platform administration →</button><button class="return-site" (click)="logout()">Sign
+          out</button>
+      </div>
+    </aside>
+    <main class="workspace-main">
+      <header class="admin-topbar">
+        <div class="breadcrumb">Studio workspace <span>/</span> {{activeTab | titlecase}}</div>
+        <div class="topbar-right"><span class="live-status"><i></i> API connected</span><button
+            class="button button-outline" (click)="loadAll()">Refresh ↻</button></div>
+      </header>
+      <div class="admin-content">
+        <div class="admin-welcome">
+          <div>
+            <div class="eyebrow">JJ MAKEUP STUDIO & ACADEMY</div>
+            <h1>{{activeTab==='overview'?'Your studio, at a glance':activeTab==='services'?'Services &
+              pricing':activeTab==='bookings'?'Appointments & walk-ins':activeTab==='confirmed'?'Confirmed
+              bookings':activeTab==='content'?'Website content':'Reports &
+              analytics'}}</h1>
+            <p>Changes are saved through the API and stored in the SQLite database.</p>
+          </div>
+          <button class="button button-dark" *ngIf="activeTab==='services'"
+            (click)="serviceForm=emptyService();editingServiceId=null">＋ New service</button>
+            
+            <div class="booking-list-heading-actions" *ngIf="activeTab==='bookings'">
+                <button class="button button-dark" type="button" *ngIf="!showWalkInForm"
+                  (click)="openWalkInForm()">＋ New Walk-in Booking</button>
+              </div>
+        </div>
+        <div class="notice success-notice" *ngIf="notice">{{notice}} <button (click)="notice=''">×</button></div>
+        <div class="notice error-notice" *ngIf="error">{{error}} <button (click)="error=''">×</button></div>
+        <div class="loading-line" *ngIf="loading">Loading or saving workspace data…</div>
+        <ng-container *ngIf="activeTab==='overview'">
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-top"><span>Total bookings</span><span class="stat-icon">◷</span></div>
+              <strong>{{bookings.length}}</strong>
+              <div class="stat-foot">Saved appointment requests</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span>Pending requests</span><span class="stat-icon">◌</span></div>
+              <strong>{{pendingBookings}}</strong>
+              <div class="stat-foot">Waiting for studio review</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span>Published services</span><span class="stat-icon">✧</span></div>
+              <strong>{{publishedServices}}</strong>
+              <div class="stat-foot">Visible on the public website</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-top"><span>Content posts</span><span class="stat-icon">▤</span></div>
+              <strong>{{posts.length}}</strong>
+              <div class="stat-foot">Drafts and published posts</div>
+            </div>
+          </div>
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Upcoming appointments</h2>
+                <p>Real requests received from the public booking form.</p>
+              </div><button class="row-action" (click)="activeTab='bookings'">View all ↗</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CUSTOMER</th>
+                    <th>SERVICE</th>
+                    <th>DATE & TIME</th>
+                    <th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let b of upcomingBookings.slice(0,5)">
+                    <td><strong>{{b.customerName}}</strong><small class="table-subtext">{{b.phone}}</small></td>
+                    <td>{{b.serviceName || 'Studio service'}}</td>
+                    <td>{{dateTime(b.appointmentAt)}}</td>
+                    <td><span class="status-chip" [attr.data-status]="b.status">{{b.status}}</span></td>
+                  </tr>
+                  <tr *ngIf="!upcomingBookings.length">
+                    <td colspan="4" class="table-empty">No upcoming bookings yet. Public booking requests will appear
+                      here.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </ng-container>
+        <ng-container *ngIf="activeTab==='services'">
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>{{editingServiceId?'Edit service':'Create a service'}}</h2>
+                <p>Services saved here are used by the public booking form.</p>
+              </div><span class="panel-count">{{services.length}} records</span>
+            </div>
+            <form class="entity-form" (ngSubmit)="saveService()"><label>Service name<input
+                  [(ngModel)]="serviceForm.name" name="serviceName" maxlength="140"
+                  required></label><label>Category<select [(ngModel)]="serviceForm.category" name="serviceCategory">
+                  <option>Bridal</option>
+                  <option>Occasion</option>
+                  <option>Makeup</option>
+                  <option>Academy</option>
+                  <option>Hair</option>
+                  <option>Skin</option>
+                </select></label><label>Price (₹)<input type="number" [(ngModel)]="serviceForm.price"
+                  name="servicePrice" min="0" max="99999999" required></label><label>Duration (minutes)<input
+                  type="number" [(ngModel)]="serviceForm.durationMinutes" name="duration" min="1"></label><label
+                class="form-wide">Description<textarea [(ngModel)]="serviceForm.description" name="description" rows="2"
+                  maxlength="2000"></textarea></label><label class="form-wide">Cover image URL (optional)<input
+                  type="url" [(ngModel)]="serviceForm.coverImageUrl" name="coverImageUrl"
+                  placeholder="https://…"></label><label class="check-label"><input type="checkbox"
+                  [(ngModel)]="serviceForm.isActive" name="isActive"> Active</label><label class="check-label"><input
+                  type="checkbox" [(ngModel)]="serviceForm.isPublished" name="isPublished"> Published on website</label>
+              <div class="form-actions"><button class="button button-dark" [disabled]="saving"
+                  type="submit">{{saving?'Saving…':editingServiceId?'Save changes':'Create service'}}</button><button
+                  class="button button-outline" type="button"
+                  (click)="serviceForm=emptyService();editingServiceId=null">Clear</button></div>
+            </form>
+          </section>
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Service catalogue</h2>
+                <p>Publish, edit or deactivate services.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>SERVICE</th>
+                    <th>CATEGORY</th>
+                    <th>PRICE</th>
+                    <th>PUBLIC STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of services">
+                    <td><strong>{{s.name}}</strong><small class="table-subtext">{{s.description}}</small></td>
+                    <td>{{s.category}}</td>
+                    <td>{{money(s.price)}}</td>
+                    <td><span class="status-chip"
+                        [attr.data-status]="s.isPublished && s.isActive?'Published':'Hidden'">{{s.isPublished &&
+                        s.isActive?'Published':'Hidden'}}</span></td>
+                    <td class="table-actions"><button class="row-action" (click)="editService(s)">Edit</button><button
+                        class="row-action"
+                        (click)="toggleService(s)">{{s.isPublished?'Unpublish':'Publish'}}</button><button
+                        class="row-action danger-action" (click)="deleteService(s)">Deactivate</button></td>
+                  </tr>
+                  <tr *ngIf="!services.length">
+                    <td colspan="5" class="table-empty">No services saved. Create your first service above.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </ng-container>
+        <ng-container *ngIf="activeTab==='bookings'">
+          <section class="admin-panel" *ngIf="showWalkInForm">
+            <div class="panel-heading">
+              <div>
+                <h2>{{editingBookingId ? 'Edit booking' : 'New walk-in booking'}}</h2>
+                <p>{{editingBookingId ? 'Update client, appointment, artist or pricing details.' : 'Register a client
+                  who visits the studio directly. The request timestamp is recorded separately from the appointment
+                  time.'}}</p>
+              </div><button class="button button-outline" type="button" (click)="resetBookingForm()">{{editingBookingId
+                ? 'Cancel edit' : 'Close form'}} ×</button>
+            </div>
+            <form class="entity-form booking-entry-form" (ngSubmit)="saveBooking()">
+              <label>Client full name<input [(ngModel)]="bookingForm.customerName" name="walkinName" maxlength="120"
+                  required></label>
+              <label>Mobile number<input [(ngModel)]="bookingForm.phone" name="walkinPhone" type="tel" maxlength="30"
+                  required></label>
+              <label>Email address (optional)<input [(ngModel)]="bookingForm.email" name="walkinEmail" type="email"
+                  maxlength="200"></label>
+              <label class="form-wide">Client address (optional)<input [(ngModel)]="bookingForm.customerAddress"
+                  name="walkinAddress" maxlength="500"></label>
+              <label>Service<select [(ngModel)]="bookingForm.serviceId" name="walkinService"
+                  (ngModelChange)="onServiceSelected()">
+                  <option [ngValue]="null">Custom / no linked service</option>
+                  <option *ngFor="let s of services" [ngValue]="s.id" [disabled]="!s.isActive">{{s.name}} —
+                    {{money(s.price)}}</option>
+                </select></label>
+              <label>Appointment date & time<input [(ngModel)]="bookingForm.appointmentAt" name="walkinAppointment"
+                  type="datetime-local" required></label>
+              <label>Event date (optional)<input [(ngModel)]="bookingForm.eventDate" name="walkinEventDate"
+                  type="date"></label>
+              <label>Event type<select [(ngModel)]="bookingForm.eventType" name="walkinEventType">
+                  <option value="">Select event type</option>
+                  <option>Wedding</option>
+                  <option>Engagement</option>
+                  <option>Reception</option>
+                  <option>Party</option>
+                  <option>Photoshoot</option>
+                  <option>Course / Training</option>
+                  <option>Other</option>
+                </select></label>
+              <label>Assigned artist / staff<input [(ngModel)]="bookingForm.assignedArtist" name="walkinArtist"
+                  maxlength="120" placeholder="Artist name"></label>
+              <label>Agreed price (₹)<input [(ngModel)]="bookingForm.priceSnapshot" name="walkinPrice" type="number"
+                  min="0" max="99999999" step="0.01" required></label>
+              <label>Discount (₹)<input [(ngModel)]="bookingForm.discountAmount" name="walkinDiscount" type="number"
+                  min="0" [max]="bookingForm.priceSnapshot" step="0.01" required></label>
+              <label>Final amount (₹)<input [value]="bookingFinalAmount | number:'1.2-2'" name="walkinFinal"
+                  readonly></label>
+              <label>Advance received now (₹)<input [(ngModel)]="initialAdvanceAmount" name="walkinAdvance"
+                  type="number" min="0" [max]="bookingFinalAmount" step="0.01" [disabled]="!!editingBookingId"></label>
+              <label>Advance payment mode<select [(ngModel)]="initialPaymentMode" name="walkinAdvanceMode"
+                  [disabled]="!!editingBookingId">
+                  <option>Cash</option>
+                  <option>UPI</option>
+                  <option>Card</option>
+                  <option>Bank Transfer</option>
+                  <option>Other</option>
+                </select></label>
+              <label class="form-wide">Remarks / special requirements<textarea [(ngModel)]="bookingForm.notes"
+                  name="walkinNotes" rows="3" maxlength="1000"
+                  placeholder="Client preferences, skin sensitivities, outfit details, agreed terms…"></textarea></label>
+              <div class="form-actions form-wide"><button class="button button-dark" [disabled]="bookingSaving"
+                  type="submit">{{bookingSaving ? 'Saving…' : editingBookingId ? 'Save booking changes' : 'Save &
+                  confirm booking'}}</button><button class="button button-outline" type="button"
+                  (click)="resetBookingForm()">{{editingBookingId ? 'Cancel edit' : 'Clear form'}}</button></div>
+            </form>
+          </section>
+          <section class="admin-panel booking-list-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>All booking requests</h2>
+                <p>Online requests and walk-ins. Request time and scheduled appointment time are shown separately.</p>
+              </div>
+              <div class="booking-list-heading-actions">
+                <span class="panel-count">{{bookings.length}}
+                  bookings</span>
+                  <!-- <button class="button button-dark" type="button" *ngIf="!showWalkInForm"
+                  (click)="openWalkInForm()">＋ New Walk-in Booking</button> -->
+              </div>
+            </div>
+            <div class="booking-filters"><input [(ngModel)]="bookingSearch" name="bookingSearch"
+                placeholder="Search client, phone, email or service"><select [(ngModel)]="bookingStatusFilter"
+                name="bookingStatus">
+                <option>All</option>
+                <option>Pending</option>
+                <option>Confirmed</option>
+                <option>Completed</option>
+                <option>Cancelled</option>
+                <option>Rejected</option>
+              </select></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CUSTOMER</th>
+                    <th>SERVICE</th>
+                    <th>REQUEST RECEIVED</th>
+                    <th>APPOINTMENT</th>
+                    <th>AMOUNT</th>
+                    <th>STATUS</th>
+                    <th>UPDATE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let b of filteredBookings">
+                    <td><strong>{{b.customerName}}</strong><small
+                        class="table-subtext">{{b.phone}}<br>{{b.email}}</small></td>
+                    <td>{{b.serviceName || 'Studio service'}}</td>
+                    <td>{{dateTime(b.createdAt)}}<small class="table-subtext">{{b.requestSource || 'Online'}}</small>
+                    </td>
+                    <td>{{dateTime(b.appointmentAt)}}<small class="table-subtext" *ngIf="b.modifiedAt">Updated
+                        {{dateTime(b.modifiedAt)}}</small></td>
+                    <td>{{money((b.priceSnapshot || 0) - (b.discountAmount || 0))}}<small class="table-subtext">Advance
+                        {{money(b.paidAmount || 0)}}</small><small class="table-subtext">Due {{money(b.balanceDue ??
+                        ((b.priceSnapshot || 0) - (b.discountAmount || 0)))}}</small><small class="table-subtext"
+                        *ngIf="b.discountAmount">Discount {{money(b.discountAmount)}}</small></td>
+                    <td><span class="status-chip" [attr.data-status]="b.status">{{b.status}}</span></td>
+                    <td class="table-actions"><button class="row-action"
+                        (click)="openBookingDetails(b)">Details</button><button class="row-action"
+                        (click)="editBooking(b)">Edit / reschedule</button><button class="row-action"
+                        *ngIf="b.status==='Pending'" (click)="changeBooking(b,'Confirmed')">Confirm</button><button
+                        class="row-action" *ngIf="b.status==='Pending' || b.status==='Confirmed'"
+                        (click)="changeBooking(b,'Completed')">Complete</button><button class="row-action danger-action"
+                        *ngIf="b.status!=='Cancelled' && b.status!=='Completed'"
+                        (click)="cancelBooking(b)">Cancel</button></td>
+                  </tr>
+                  <tr *ngIf="!bookings.length">
+                    <td colspan="7" class="table-empty">No booking requests yet. Submit a booking from the public
+                      website to test this flow.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </ng-container>
+        <ng-container *ngIf="activeTab==='confirmed'">
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Confirmed appointments</h2>
+                <p>Nearest upcoming appointment first. Rescheduled appointments use the latest appointment time.</p>
+              </div><span class="panel-count">{{confirmedBookings.length}} confirmed</span>
+            </div>
+            <div class="booking-filters"><input [(ngModel)]="bookingSearch" name="confirmedSearch"
+                placeholder="Search client, phone, email or service"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>APPOINTMENT</th>
+                    <th>CLIENT</th>
+                    <th>SERVICE / ARTIST</th>
+                    <th>AGREED AMOUNT</th>
+                    <th>REQUEST RECEIVED</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let b of confirmedBookings">
+                    <td><strong>{{dateTime(b.appointmentAt)}}</strong><small class="table-subtext">{{b.eventType ||
+                        'Appointment'}}</small></td>
+                    <td><strong>{{b.customerName}}</strong><small class="table-subtext">{{b.phone}} ·
+                        {{b.email}}</small></td>
+                    <td>{{b.serviceName || 'Custom service'}}<small class="table-subtext">{{b.assignedArtist || 'Artist
+                        not assigned'}}</small></td>
+                    <td>{{money((b.priceSnapshot || 0) - (b.discountAmount || 0))}}<small class="table-subtext">Advance
+                        {{money(b.paidAmount || 0)}}</small><small class="table-subtext">Due {{money(b.balanceDue ??
+                        ((b.priceSnapshot || 0) - (b.discountAmount || 0)))}}</small><small class="table-subtext"
+                        *ngIf="b.discountAmount">Discount {{money(b.discountAmount)}}</small></td>
+                    <td>{{dateTime(b.createdAt)}}</td>
+                    <td class="table-actions"><button class="row-action" (click)="openBookingDetails(b)">Details /
+                        payments</button><button class="row-action" (click)="editBooking(b)">Reschedule /
+                        edit</button><button class="row-action danger-action" (click)="cancelBooking(b)">Cancel</button>
+                    </td>
+                  </tr>
+                  <tr *ngIf="!confirmedBookings.length">
+                    <td colspan="6" class="table-empty">No confirmed bookings match this search.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </ng-container>
+        <ng-container *ngIf="activeTab==='content'">
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>{{editingPostId?'Edit content':'Create website post'}}</h2>
+                <p>Create drafts and publish them to the content catalogue.</p>
+              </div>
+            </div>
+            <form class="entity-form" (ngSubmit)="savePost()"><label class="form-wide">Title<input
+                  [(ngModel)]="postTitle" name="postTitle" maxlength="180" required></label><label
+                class="form-wide">Body<textarea [(ngModel)]="postBody" name="postBody" rows="5" maxlength="5000"
+                  placeholder="Write the story or announcement…"></textarea></label><label class="form-wide">Cover image
+                URL<input [(ngModel)]="postImage" name="postImage" type="url"
+                  placeholder="https://…"></label><label>Publication status<select [(ngModel)]="postStatus"
+                  name="postStatus">
+                  <option>Draft</option>
+                  <option>Published</option>
+                </select></label>
+              <div class="form-actions"><button class="button button-dark" type="submit">{{editingPostId?'Save
+                  post':'Save draft'}}</button><button class="button button-outline" type="button"
+                  (click)="postTitle=postBody=postImage='';postStatus='Draft';editingPostId=null">Clear</button></div>
+            </form>
+          </section>
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Content library</h2>
+                <p>Content records stored by the API.</p>
+              </div>
+            </div>
+            <div class="post-list">
+              <div class="post-row" *ngFor="let p of posts"><span class="post-number">✧</span><span
+                  class="post-title"><strong>{{p.title}}</strong><small
+                    class="table-subtext">{{p.body}}</small></span><span class="status-chip"
+                  [attr.data-status]="p.status">{{p.status}}</span><button class="row-action"
+                  (click)="editPost(p)">Edit</button><button class="row-action"
+                  (click)="togglePost(p)">{{p.status==='Published'?'Unpublish':'Publish'}}</button><button
+                  class="row-action danger-action" (click)="deletePost(p)">Delete</button></div>
+              <p class="table-empty" *ngIf="!posts.length">No content yet. Create a draft above.</p>
+            </div>
+          </section>
+        </ng-container><ng-container *ngIf="activeTab==='reports'">
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Business performance</h2>
+                <p>Reports are calculated from persisted bookings and services for this studio only.</p>
+              </div><button class="button button-outline" (click)="loadAll()">Refresh ↻</button>
+            </div><ng-container *ngIf="report as r">
+              <div class="stat-grid">
+                <div class="stat-card">
+                  <div class="stat-top"><span>All appointments</span><span class="stat-icon">◷</span></div>
+                  <strong>{{r.totalBookings}}</strong>
+                  <div class="stat-foot">All-time booking requests</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-top"><span>Pending</span><span class="stat-icon">◌</span></div>
+                  <strong>{{r.pendingBookings}}</strong>
+                  <div class="stat-foot">Awaiting review</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-top"><span>Upcoming</span><span class="stat-icon">↗</span></div>
+                  <strong>{{r.upcomingBookings}}</strong>
+                  <div class="stat-foot">Not cancelled or rejected</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-top"><span>Completed revenue</span><span class="stat-icon">₹</span></div>
+                  <strong>{{r.completedRevenue | currency:'INR':'symbol':'1.0-0'}}</strong>
+                  <div class="stat-foot">Completed appointments only</div>
+                </div>
+              </div>
+              <section class="admin-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2>Monthly booking trend</h2>
+                    <p>Last six months by booking creation date.</p>
+                  </div>
+                </div>
+                <div class="report-bars">
+                  <div class="report-bar-item" *ngFor="let m of r.monthly">
+                    <div class="report-bar-value">{{m.bookings}}</div>
+                    <div class="report-bar-track"><span [style.height.%]="(m.bookings/maxMonthlyBookings)*100"></span>
+                    </div><small>{{m.label}}</small>
+                  </div>
+                </div>
+              </section>
+              <section class="admin-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2>Service performance</h2>
+                    <p>Booking volume and revenue by service.</p>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>SERVICE</th>
+                        <th>STATUS</th>
+                        <th>BOOKINGS</th>
+                        <th>COMPLETED REVENUE</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let s of r.servicePerformance">
+                        <td><strong>{{s.serviceName}}</strong></td>
+                        <td><span class="status-chip"
+                            [attr.data-status]="s.active && s.published?'Published':'Hidden'">{{s.active &&
+                            s.published?'Published':'Hidden'}}</span></td>
+                        <td>{{s.bookings}}</td>
+                        <td>{{s.completedRevenue | currency:'INR':'symbol':'1.0-0'}}</td>
+                      </tr>
+                      <tr *ngIf="!r.servicePerformance.length">
+                        <td colspan="4" class="table-empty">No service performance data yet.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="admin-panel">
+                <div class="panel-heading">
+                  <div>
+                    <h2>Recent activity</h2>
+                    <p>Latest booking and service events recorded by the API.</p>
+                  </div>
+                </div>
+                <div class="post-list">
+                  <div class="post-row" *ngFor="let a of r.recentActivity"><span class="post-number">✧</span><span
+                      class="post-title"><strong>{{a.action}}</strong><small class="table-subtext">{{a.entityType}} ·
+                        {{a.entityId}}</small></span><small>{{dateTime(a.createdAt)}}</small></div>
+                  <p class="table-empty" *ngIf="!r.recentActivity.length">No audit events recorded yet.</p>
+                </div>
+              </section>
+              <p class="table-subtext">Report generated {{r.generatedAt | date:'medium'}}. Revenue counts completed
+                bookings only; this is service-value reporting, not payment reconciliation.</p>
+            </ng-container>
+            <p class="loading-line" *ngIf="loading">Refreshing report data…</p>
+          </section>
+        </ng-container>
+      </div>
+    </main>
+  </ng-container>
+
+  <div class="modal-backdrop" *ngIf="selectedBooking" (click)="closeBookingDetails()">
+    <section class="booking-modal booking-detail-modal" (click)="$event.stopPropagation()">
+      <button class="modal-close" type="button" (click)="closeBookingDetails()" aria-label="Close">×</button>
+      <div class="eyebrow">BOOKING RECORD · {{selectedBooking.requestSource || 'Online'}}</div>
+      <h2>{{selectedBooking.customerName}} <em>details.</em></h2>
+      <p>{{selectedBooking.phone}} · {{selectedBooking.email || 'No email provided'}}<span
+          *ngIf="selectedBooking.customerAddress"> · {{selectedBooking.customerAddress}}</span></p>
+      <div class="booking-detail-grid">
+        <div><small>Requested on</small><strong>{{dateTime(selectedBooking.createdAt)}}</strong></div>
+        <div><small>Appointment</small><strong>{{dateTime(selectedBooking.appointmentAt)}}</strong></div>
+        <div><small>Status</small><strong>{{selectedBooking.status}}</strong></div>
+        <div><small>Agreed amount</small><strong>{{money((selectedBooking.priceSnapshot || 0) -
+            (selectedBooking.discountAmount || 0))}}</strong></div>
+        <div><small>Payments received</small><strong>{{money(selectedBookingPaid)}}</strong></div>
+        <div><small>Balance due</small><strong>{{money(selectedBookingBalance)}}</strong></div>
+      </div>
+      <p class="booking-remark" *ngIf="selectedBooking.notes"><strong>Remarks:</strong> {{selectedBooking.notes}}</p>
+      <p class="booking-remark" *ngIf="selectedBooking.cancellationReason"><strong>Cancellation reason:</strong>
+        {{selectedBooking.cancellationReason}}</p>
+      <section class="payment-panel">
+        <h3>Record payment / advance</h3>
+        <form class="entity-form" (ngSubmit)="recordPayment()"><label>Amount (₹)<input type="number"
+              [(ngModel)]="paymentForm.amount" name="paymentAmount" min="0.01" [max]="selectedBookingBalance"
+              step="0.01" required></label><label>Payment mode<select [(ngModel)]="paymentForm.paymentMode"
+              name="paymentMode">
+              <option>Cash</option>
+              <option>UPI</option>
+              <option>Card</option>
+              <option>Bank Transfer</option>
+              <option>Other</option>
+            </select></label><label>Reference / transaction ID<input [(ngModel)]="paymentForm.reference"
+              name="paymentReference" maxlength="120"></label><label>Received at<input
+              [(ngModel)]="paymentForm.receivedAt" name="paymentReceivedAt" type="datetime-local"
+              required></label><label class="form-wide">Payment note<input [(ngModel)]="paymentForm.notes"
+              name="paymentNotes" maxlength="500"></label>
+          <div class="form-actions form-wide"><button class="button button-dark" type="submit"
+              [disabled]="paymentSaving || selectedBookingBalance <= 0">{{paymentSaving ? 'Saving…' : 'Save
+              payment'}}</button></div>
+        </form>
+        <div class="post-list">
+          <div class="post-row" *ngFor="let p of bookingPayments"><span class="post-number">₹</span><span
+              class="post-title"><strong>{{money(p.amount)}} · {{p.paymentMode}}</strong><small
+                class="table-subtext">{{dateTime(p.receivedAt)}} · {{p.reference || 'No reference'}} {{p.notes ? '· ' +
+                p.notes : ''}}</small></span></div>
+          <p class="table-empty" *ngIf="!bookingPayments.length">No payments recorded yet.</p>
+        </div>
+      </section>
+      <section class="payment-panel">
+        <h3>Booking change history</h3>
+        <div class="post-list">
+          <div class="post-row" *ngFor="let h of bookingHistory"><span class="post-number">↻</span><span
+              class="post-title"><strong>{{h.action}}</strong><small class="table-subtext">{{h.oldStatus || '—'}} →
+                {{h.newStatus || '—'}} · {{h.remark || 'No
+                remark'}}</small></span><small>{{dateTime(h.createdAt)}}</small></div>
+          <p class="table-empty" *ngIf="!bookingHistory.length">No history recorded yet.</p>
+        </div>
+      </section>
+    </section>
+  </div>
+</div>
